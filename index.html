@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RideOps Escalation Desk (v0)</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;500;600;700;800&family=Overpass+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Overpass is drawn from Highway Gothic, the road-sign face: a fit for a commute company's ops tool. */
+:root{
+  --paper:#EEF1F4; --surface:#FFFFFF; --ink:#15202B; --ink2:#3A4754; --muted:#6A7784; --line:#D9E0E6; --line2:#EAEEF2;
+  --go:#0F6B4F; --go-soft:#E1F1EA; --stop:#B42318; --stop-soft:#FBE8E6; --amber:#8A5300; --amber-soft:#FCF0D6; --signal:#F2B33D;
+  --violet:#5B3FA8; --violet-soft:#F1EDFB; --blue:#1F4FA3; --blue-soft:#E7EEF9;
+  --hdr:52px; --strip:52px; --r:10px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:'Overpass',system-ui,sans-serif;background:var(--paper);color:var(--ink);font-size:14px;line-height:1.45;font-variant-numeric:tabular-nums}
+button,select,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px}
+.dim{color:var(--muted);font-weight:400}
+.small{font-size:12.5px;color:var(--muted)}
+
+/* header */
+header{height:var(--hdr);display:flex;align-items:stretch;gap:32px;padding:0 24px;background:var(--ink);color:#fff}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:16px;white-space:nowrap}
+.brand .mark{width:22px;height:22px;border-radius:5px;background:var(--signal);display:grid;place-items:center;color:var(--ink);font-size:13px;font-weight:800}
+.tabs{display:flex;gap:4px}
+.tabs button{background:none;border:0;border-bottom:3px solid transparent;border-top:3px solid transparent;color:#B7C2CC;padding:0 12px;cursor:pointer;font-weight:600}
+.tabs button:hover{color:#fff}
+.tabs button.on{color:#fff;border-bottom-color:var(--signal)}
+.hsp{flex:1}
+.hctl{display:flex;align-items:center;gap:12px}
+.who{display:flex;align-items:center;gap:10px;font-size:13px;color:#9AA8B5}
+.who select,.filebtn{height:34px;box-sizing:border-box;border:1px solid #3A4A59;border-radius:7px;font-size:13px;line-height:1}
+.who select{appearance:none;-webkit-appearance:none;background:#22303D url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23B7C2CC' stroke-width='1.5' fill='none'/%3E%3C/svg%3E") no-repeat right 11px center;color:#fff;padding:0 32px 0 12px;font-weight:600;min-width:132px;cursor:pointer}
+.who select:hover,.filebtn:hover{border-color:#5A6B7B}
+.filebtn{display:inline-flex;align-items:center;padding:0 12px;color:#B7C2CC;cursor:pointer;white-space:nowrap}
+.filebtn:hover{color:#fff;border-color:#5A6B7B}
+.filebtn input{display:none}
+
+/* strip: filters on the left, team status on the right */
+.strip{height:var(--strip);display:flex;align-items:center;gap:16px;padding:0 24px;background:var(--surface);border-bottom:1px solid var(--line);white-space:nowrap;overflow-x:auto}
+.filters{display:flex;gap:6px}
+.f{display:flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 6px 5px 12px;cursor:pointer;font-weight:600;font-size:13.5px;color:var(--ink2)}
+.f:hover{border-color:#B8C3CD}
+.f i{width:8px;height:8px;border-radius:50%}
+.f span{min-width:22px;text-align:center;border-radius:999px;background:var(--line2);padding:1px 7px;font-size:12.5px}
+.f.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.f.on span{background:#33414E;color:#fff}
+.f:disabled{opacity:.45;cursor:default}
+.f-back i{background:var(--stop)} .f-fixed i{background:var(--go)} .f-new i{background:var(--blue)} .f-eng i{background:#9AA8B5}
+.you{font-weight:600;color:var(--ink2)}
+.sright{margin-left:auto;display:flex;gap:18px;font-size:13px;color:var(--muted)}
+.sright b{color:var(--ink)}
+.log{color:var(--go);font-weight:600}
+
+main{display:grid;grid-template-columns:360px minmax(0,1fr);height:calc(100vh - var(--hdr) - var(--strip))}
+
+/* ticket list */
+.queue{background:var(--surface);border-right:1px solid var(--line);overflow:auto}
+.qitem{display:grid;grid-template-columns:32px minmax(0,1fr);gap:10px;align-items:start;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line2);border-left:3px solid transparent;padding:12px 16px 12px 13px;cursor:pointer}
+.qitem:hover{background:#F6F8FA}
+.qitem.sel{background:var(--blue-soft);border-left-color:var(--blue)}
+.qitem.done{opacity:.5}
+.qmain{display:flex;flex-direction:column;gap:5px;min-width:0}
+.qtop,.qbot{display:flex;gap:10px;align-items:flex-start;justify-content:space-between}
+.qbot{align-items:center}
+.qtop .qage{padding-top:1px}
+.qdesc{font-weight:600;font-size:14px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.q2{display:flex;gap:10px;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;min-width:0}
+.q2 span{overflow:hidden;text-overflow:ellipsis}
+.q2 span+span::before{content:"";display:inline-block;width:3px;height:3px;border-radius:50%;background:#AAB5BF;vertical-align:middle;margin-right:10px}
+.qside{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.qage{font-size:12.5px;color:var(--muted);font-weight:600}
+.qage.old{color:var(--stop)}
+.chip{display:inline-block;width:30px;text-align:center;font-size:11.5px;font-weight:700;padding:2px 0 1px;border-radius:4px;background:var(--line2);color:var(--ink2);line-height:1.35}
+.chip.P1{background:var(--stop);color:#fff}
+.chip.P2{background:var(--stop-soft);color:var(--stop)}
+.tag{font-size:11.5px;font-weight:700;padding:2px 7px 1px;border-radius:4px;white-space:nowrap}
+.tag.bad{background:var(--stop-soft);color:var(--stop)} .tag.ok{background:var(--go-soft);color:var(--go)} .tag.dim{background:var(--line2);color:var(--muted)} .tag.new{background:var(--blue-soft);color:var(--blue)}
+.empty{color:var(--muted);padding:72px 24px;text-align:center;line-height:1.6}
+.empty b{display:block;color:var(--ink);font-size:16px;margin-bottom:2px}
+
+/* workspace */
+.ws{display:flex;flex-direction:column;min-height:0;min-width:0}
+.ws-scroll{flex:1;overflow:auto;padding:24px 32px 32px}
+.inner{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.tk-id{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px;font-weight:600}
+.tk-head h1{font-size:22px;line-height:1.25;font-weight:700;margin:8px 0 16px}
+.facts{display:grid;grid-template-columns:1fr 1.25fr .9fr .9fr 1fr;margin:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.facts div{min-width:0;padding:12px 16px}
+.facts div+div{border-left:1px solid var(--line2)}
+.facts dt{font-size:12px;color:var(--muted);margin-bottom:3px}
+.facts dd{margin:0;font-weight:700;overflow-wrap:anywhere}
+.facts dd.sub{font-weight:400;font-size:12.5px;color:var(--muted);margin-top:1px}
+.rec{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;padding:12px 16px;border-radius:8px;border-left:4px solid}
+.rec b{font-weight:700}
+.rec span{color:var(--ink2)}
+.rec.bad{background:var(--stop-soft);border-color:var(--stop)}
+.rec.warn{background:var(--amber-soft);border-color:var(--signal)}
+.rec.good{background:var(--go-soft);border-color:var(--go)}
+.rec.info{background:var(--blue-soft);border-color:var(--blue)}
+.tip{font-size:12.5px;color:var(--muted);text-decoration:underline dotted;text-underline-offset:3px;cursor:help;font-weight:500}
+.ki{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border:1px solid #DCD3F2;background:var(--violet-soft);border-radius:var(--r)}
+.ki .t{font-weight:700;color:var(--violet);display:flex;gap:10px;align-items:baseline}
+.ki .ids{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.eng{font-family:'Overpass Mono',monospace;font-size:12.5px;background:#fff;border:1px solid #DCD3F2;border-radius:5px;padding:2px 8px;color:var(--violet);cursor:default}
+.eng em{font-family:'Overpass',sans-serif;font-style:normal;color:var(--muted);font-size:11.5px;margin-left:2px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px}
+.card-h{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+.card-h h2{font-size:15px;font-weight:700;margin:0}
+.card-h .dim{font-size:13px;margin-left:auto}
+.p{margin:0;color:var(--ink2)}
+
+/* similar tickets */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line2);border-radius:8px}
+.stats div{padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.stats div+div{border-left:1px solid var(--line2)}
+.stats b{font-size:22px;font-weight:800;line-height:1.1}
+.stats b.red{color:var(--stop)}
+.stats span{font-size:12.5px;color:var(--muted)}
+.sim-foot{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-top:12px;font-size:13px;color:var(--ink2)}
+details summary{cursor:pointer;color:var(--blue);font-weight:600;white-space:nowrap;list-style-position:inside}
+details[open]{flex-basis:100%}
+details[open] summary{margin-bottom:8px}
+.sim-foot:has(details[open]){flex-wrap:wrap}
+.vbar{display:flex;height:12px;border-radius:3px;overflow:hidden;gap:2px}
+.vbar div{height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px}
+.legend b{color:var(--ink);font-weight:600}
+
+/* checklist */
+.cl{display:grid;grid-template-columns:1fr 1fr;gap:0 32px}
+.cl-col+.cl-col{border-left:1px solid var(--line2);padding-left:32px}
+.cl h3{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700;margin:0 0 8px}
+.cl h3 .dim{font-size:12.5px}
+.stepn{flex:none;width:22px;height:22px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700}
+.stepn.ok{background:var(--go)}
+.chk{display:flex;gap:10px;align-items:flex-start;padding:7px 8px;margin:0 -8px;border-radius:6px;cursor:pointer}
+.chk:hover{background:#F4F6F8}
+.chk input{width:16px;height:16px;margin:2px 0 0;accent-color:var(--go);flex:none;cursor:pointer}
+.chk.on span{color:var(--muted)}
+.field{margin-bottom:10px}
+.field label{display:block;font-size:12.5px;font-weight:600;margin-bottom:4px;color:var(--ink2)}
+.field input,.field select{width:100%;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;background:#FAFBFC}
+.field input:focus{background:#fff;border-color:var(--blue);outline:none;box-shadow:0 0 0 3px var(--blue-soft)}
+.field input.filled{border-color:#B9D9CA;background:#fff}
+.p1{margin-top:6px;padding:8px 12px;border:1px dashed var(--stop);border-radius:8px;background:#FFF8F7}
+.p1 .chk{margin:0 -4px;padding:4px}
+.p1 .field{margin:6px 0 4px}
+
+.why{flex:none;margin-left:auto;font-style:normal;font-size:11.5px;font-weight:600;color:var(--muted);background:var(--line2);border-radius:4px;padding:1px 6px;white-space:nowrap;align-self:flex-start;margin-top:1px;cursor:help}
+.chk span{flex:1}
+.cl-note{margin:-2px 0 8px 32px;font-size:12.5px;color:var(--muted)}
+.cl-note b{color:var(--ink2)}
+/* bottom decision bar */
+.bar{flex:none;display:flex;align-items:center;gap:20px;padding:12px 32px;background:var(--ink);color:#fff}
+.gate{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
+.gate .meter{display:flex;gap:3px;max-width:280px}
+.gate .meter i{flex:1;height:6px;border-radius:2px;background:#3A4A59}
+.gate .meter i.on{background:var(--signal)}
+.gate.open .meter i.on{background:#3FBF8C}
+.gate .lbl,.bar .msg{font-size:13px;color:#C7D1DA}
+.gate .lbl b,.bar .msg b{color:#fff}
+.bar .msg{flex:1}
+.acts{display:flex;align-items:center;gap:10px}
+.confirm{display:flex;align-items:center;gap:7px;font-size:13px;color:#C7D1DA;cursor:pointer;padding:0 6px;white-space:nowrap}
+.confirm input{width:16px;height:16px;accent-color:#3FBF8C;margin:0}
+.btn{height:38px;display:inline-flex;align-items:center;border:1px solid var(--line);background:#fff;color:var(--ink);padding:0 16px;border-radius:7px;cursor:pointer;font-weight:700;white-space:nowrap}
+.btn:hover{background:#F2F5F7}
+.btn.go{background:var(--go);border-color:var(--go);color:#fff}
+.btn.go:hover{background:#0C5A42}
+.btn.esc{background:var(--signal);border-color:var(--signal);color:var(--ink)}
+.btn.esc:hover{background:#E3A42C}
+.btn.violet{background:var(--violet);border-color:var(--violet);color:#fff;flex:none}
+.btn.violet:hover{background:#4C3390}
+.btn.ghost{background:transparent;border-color:#4D5E6E;color:#DCE3E9}
+.btn.ghost:hover{background:#22303D}
+.bar .btn:disabled{background:transparent;border:1px dashed #4D5E6E;color:#7F8E9B;cursor:not-allowed}
+
+.done{padding:16px 18px;border-radius:var(--r);background:var(--go-soft);border-left:4px solid var(--go)}
+.done .t{font-weight:700;font-size:15px;color:var(--go)}
+pre.packet{background:#fff;border:1px solid var(--line);border-radius:8px;padding:14px 16px;font-family:'Overpass Mono',monospace;font-size:12.5px;white-space:pre-wrap;margin:12px 0 0;line-height:1.55}
+
+.newform{display:grid;grid-template-columns:minmax(0,1fr) 240px 90px auto;gap:12px;align-items:end}
+.newform .field{margin:0}
+.match{margin-top:12px;font-size:13.5px;color:var(--ink2)}
+.gap{height:8px}
+
+/* my stats */
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.charts .wide{grid-column:1/-1}
+.charts svg{display:block;width:100%;height:auto;overflow:visible}
+.charts .ax{font-size:11px;fill:var(--muted)}
+.charts .lb{font-size:12.5px;fill:var(--ink2)}
+.charts .vl{font-size:12px;font-weight:700;fill:var(--ink);paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}
+.charts .ax{paint-order:stroke;stroke:#fff;stroke-width:3px}
+.charts .me{fill:var(--blue);font-weight:800}
+.charts .mk{cursor:default;outline:none}
+.charts g.mk:hover rect,.charts g.mk:focus rect{fill:#F3F6F9}
+.charts div.mk:hover,.charts div.mk:focus{filter:brightness(1.12)}
+.keys{margin-left:auto;display:flex;gap:14px;font-size:12.5px;color:var(--muted)}
+.key{display:flex;align-items:center;gap:6px}
+.key i{width:10px;height:10px;border-radius:2px}
+.key.line i{width:16px;height:2px;border-radius:1px}
+.key.dash i{background:repeating-linear-gradient(90deg,var(--muted) 0 5px,transparent 5px 9px)}
+.key .dot{width:10px;height:10px;border-radius:50%;background:var(--ink)}
+.key .ring{width:9px;height:9px;border-radius:50%;border:2px solid var(--muted);background:#fff}
+.mixrow{display:grid;grid-template-columns:48px 1fr 52px;gap:10px;align-items:center;margin:10px 0}
+.mixbar{display:flex;gap:2px;height:22px;border-radius:4px;overflow:hidden}
+.lb2{font-size:13px;font-weight:600;color:var(--ink2)}
+.ax2{font-size:12px;color:var(--muted);text-align:right}
+.minis{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.mt{font-size:13px;font-weight:600;color:var(--ink2);margin-bottom:4px}
+#tt{position:fixed;z-index:20;pointer-events:none;background:var(--ink);color:#fff;font-size:12.5px;font-weight:600;padding:6px 10px;border-radius:6px;opacity:0;transform:translate(-50%,calc(-100% - 10px));white-space:nowrap}
+#tt.on{opacity:1}
+.insight{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line2);font-size:13.5px;color:var(--ink2)}
+.insight+.insight{margin-top:6px;padding-top:0;border-top:0}
+@media (max-width:1000px){.charts{grid-template-columns:1fr}.minis{grid-template-columns:1fr}}
+
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.note{background:var(--surface);border:1px solid var(--line);border-top:4px solid;border-radius:var(--r);padding:14px 16px}
+.note.bad{border-top-color:var(--stop)} .note.warn{border-top-color:var(--signal)} .note.good{border-top-color:var(--go)} .note.info{border-top-color:var(--blue)}
+.nt{font-size:16px;font-weight:600}
+.nt b{font-weight:800}
+.nd{font-size:13px;color:var(--muted);margin-top:4px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line2)}
+th{font-size:12.5px;color:var(--muted);font-weight:600;white-space:nowrap}
+th[title]{cursor:help}
+th .q{display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;background:var(--line2);font-size:10px;color:var(--muted)}
+td.num,th.num{text-align:right}
+tr.me td{background:var(--blue-soft);font-weight:700}
+tr.me td:first-child{box-shadow:inset 3px 0 0 var(--blue)}
+.hi{color:var(--stop);font-weight:700}
+.lo{color:var(--go);font-weight:700}
+
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:8px;font-size:13.5px;font-weight:600;opacity:0;transition:opacity .15s;pointer-events:none;box-shadow:0 6px 20px rgba(21,32,43,.25)}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+@media (max-width:1180px){.facts{grid-template-columns:repeat(3,minmax(0,1fr))}.facts div:nth-child(4){border-left:0}.facts div:nth-child(n+4){border-top:1px solid var(--line2)}.cl{grid-template-columns:1fr}.cl-col+.cl-col{border-left:0;padding-left:0;border-top:1px solid var(--line2);padding-top:14px;margin-top:10px}.stats{grid-template-columns:repeat(2,1fr)}.stats div:nth-child(3){border-left:0}.stats div:nth-child(n+3){border-top:1px solid var(--line2)}}
+@media (max-width:860px){
+  header{height:auto;flex-wrap:wrap;gap:8px 16px;padding:10px 14px}.tabs button{padding:8px 10px}
+  .strip{height:auto;padding:10px 14px}.sright{display:none}
+  main{grid-template-columns:1fr;height:auto}.queue{max-height:42vh;border-right:0;border-bottom:1px solid var(--line)}
+  .ws-scroll{padding:18px 16px}.bar{position:sticky;bottom:0;padding:12px 16px;flex-direction:column;align-items:stretch;gap:10px}.acts{flex-wrap:wrap;justify-content:flex-end}
+  .facts{grid-template-columns:repeat(2,minmax(0,1fr))}.facts div{border-left:0!important;border-top:1px solid var(--line2)}.facts div:nth-child(-n+2){border-top:0}.facts div:nth-child(even){border-left:1px solid var(--line2)!important}
+  .newform{grid-template-columns:1fr}.ki{flex-direction:column;align-items:flex-start}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="mark" aria-hidden="true">E</span>Escalation Desk</div>
+  <nav class="tabs" id="tabs" aria-label="Views">
+    <button data-v="queue" class="on">My tickets</button>
+    <button data-v="check">Quick check</button>
+    <button data-v="me">My stats</button>
+  </nav>
+  <div class="hsp"></div>
+  <div class="hctl">
+    <label class="who"><span>Working as</span><select id="agentSel"></select></label>
+    <label class="filebtn" title="Load a newer ticket export with the same columns">Load newer export<input type="file" id="file" accept=".csv"></label>
+  </div>
+</header>
+<div class="strip" id="strip"></div>
+<main id="main"></main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div id="tt" role="tooltip"></div>
+
+<script>
+// ---------- constants ----------
+const O = {FIX:'Fixed', INFO:'Insufficient info - returned to L1', CFG:'Config issue - returned to L1',
+           DUP:'Duplicate of known issue', HOW:'Not a bug - how-to', NR:'Not reproducible'};
+const AVOID = new Set([O.INFO,O.CFG,O.DUP,O.HOW,O.NR]);
+const OCOL = {[O.FIX]:'#108A5E',[O.INFO]:'#B42318',[O.CFG]:'#D9822B',[O.DUP]:'#5B3FA8',[O.HOW]:'#C9A227',[O.NR]:'#3A7DC0'};
+const OSHORT = {[O.FIX]:'Fixed by eng',[O.INFO]:'Returned: missing info',[O.CFG]:'Returned: config issue',
+                [O.DUP]:'Duplicate of known issue',[O.HOW]:'Not a bug (how-to)',[O.NR]:'Not reproducible'};
+const PRANK = {P1:1,P2:2,P3:3,P4:4};
+
+// Pre-escalation playbooks, one per category. Each check targets one kind of send-back
+// ('cfg' config issue, 'dup' duplicate, 'how' how-to, 'nr' not reproducible); the app shows how often
+// engineering returned this category for that reason, computed live from the loaded export.
+// `when` limits a check to the symptoms it applies to. Required fields target 'insufficient info' returns.
+// The wording of each check is a draft to agree with Engineering in week 1: the data has no resolution notes.
+const PLAYBOOK = {
+ 'Roster / booking not syncing': {route:'eng',
+   checks:[['Checked the booking cutoff in the client config, and whether the booking was made after it','cfg',/cutoff|booked for|ad-hoc/i],
+           ['Checked the roster upload log for rejected rows','cfg',/excel|upload/i],
+           ['Checked the employee\'s booking history for the cancellation or the duplicate entry','cfg',/cancel|duplicate/i],
+           ['Asked the admin to re-sync the roster, then checked the employee view again','nr']],
+   fields:[['Affected employee IDs (2-3 examples)',1],['Shift date and time',1],['Booking or upload reference',1],['What the admin view shows vs the employee view',0]]},
+ 'Live tracking / GPS incorrect': {route:'eng',
+   checks:[['Confirmed the driver app is on the current version','cfg'],
+           ['Confirmed location permission is on and battery saver is off on the driver phone','cfg',/gps|frozen|km away|eta|route/i],
+           ['Checked the tracking link has not expired and the viewer\'s role has access','cfg',/link/i],
+           ['Checked if it is one driver or many (one driver usually means the device, not a bug)','nr']],
+   fields:[['Trip ID',1],['Vehicle number or driver',1],['Time window when it happened',1],['One driver or several?',1]]},
+ 'Report export failing': {route:'eng',
+   checks:[['Compared it with the known issues (month-start report load, scheduled emails) before escalating','dup'],
+           ['Confirmed the date range is within the supported limit','cfg',/range|missing|stuck/i],
+           ['Checked the recipient list and spam folder','cfg',/email/i],
+           ['Tried another format (CSV or Excel) or a smaller date range','nr']],
+   fields:[['Report name',1],['Date range and filters used',1],['User email and time of attempt',1]]},
+ 'OTP / boarding issue': {route:'eng',
+   checks:[['Checked the employee\'s phone number in their profile, and SMS delivery or DND for it','cfg',/receiving/i],
+           ['Confirmed the driver started the trip before the OTP was entered','how',/starting|invalid|boarded/i],
+           ['Confirmed the driver app is on the current version','cfg']],
+   fields:[['Trip ID',1],['Employee ID',1],['Exact error text shown',1],['Time of attempt',0]]},
+ 'Billing / invoice discrepancy': {route:'eng',
+   checks:[['Checked which rate card version was applied to the invoice','cfg'],
+           ['Reconciled the invoice trip count against the trip export','cfg',/count|cancel|dead/i],
+           ['Checked the contract rules for tolls and dead-km before calling it a bug','cfg',/toll|dead/i]],
+   fields:[['Invoice number',1],['Disputed trip IDs or line items',1],['Client\'s expected figure',1]]},
+ 'Employee address / geocode change': {route:'eng',
+   checks:[['Confirmed the address is updated in the employee profile','cfg'],['Moved the pin by hand or re-geocoded it','cfg'],['Re-ran routing after the change','nr']],
+   fields:[['Employee IDs',1],['Old and new address',1],['Shift date the old address was used',0]]},
+ 'Login / access issue': {route:'l1',
+   checks:[['Confirmed the user exists and has the right role','how'],['Triggered a password reset or unlock','cfg',/password|locked|log in/i],['For SSO: checked the client\'s SSO config and domain mapping','cfg',/sso/i]],
+   fields:[['User email',1],['Exact error text',1]]},
+ 'Cab delay / no-show complaint': {route:'ops', routeTo:'Transport Ops / vendor',
+   checks:[['Checked the GPS trail for the trip','nr'],['Confirmed it is a service issue (vendor or driver), not wrong data in the app','cfg']],
+   fields:[['Trip ID and route',1],['What the app data shows vs what happened',1]]},
+ 'Driver / vehicle compliance docs': {route:'ops', routeTo:'Vendor management',
+   checks:[['Checked document status and expiry in the vendor portal','cfg'],['Notified the vendor, and blocked the vehicle if a document has expired','cfg',/expired/i],
+           ['Retried the upload with a supported file type and size','nr',/upload/i],['Checked the verification status with the vendor','cfg',/verification/i]],
+   fields:[['Vehicle number',1],['Document and expiry date',1]]},
+ 'How-to / feature request': {route:'product', routeTo:'Product backlog',
+   checks:[['Searched the help docs and answered the how-to if one exists','how'],['If it is a feature request, logged it for Product (not Engineering)','how',/request|need|can we|option/i]],
+   fields:[['What the client wants to do',1]]},
+};
+const DEFAULT_PB = {route:'eng',checks:[['Reproduced or confirmed the issue','nr']],fields:[['Steps to reproduce',1],['IDs involved',1]]};
+const CTYPE = {cfg:[O.CFG,'config issue'],dup:[O.DUP,'duplicate'],how:[O.HOW,'how-to'],nr:[O.NR,"can't reproduce"]};
+// checks that apply to this ticket's symptom
+function checksFor(tk){ const pb=PLAYBOOK[tk.category]||DEFAULT_PB; return pb.checks.filter(([,,w])=>!w||w.test(tk.description)); }
+
+// ---------- state ----------
+let T=[], AS_OF=null, AGENTS=[], ST={agent:null, view:'queue', filter:'all', sel:null, acts:{}, form:{}, newTicket:null};
+try{ const s=JSON.parse(localStorage.getItem('rideops-desk')||'{}'); if(s.agent) ST.agent=s.agent; }catch(e){}
+function save(){ try{ localStorage.setItem('rideops-desk', JSON.stringify({agent:ST.agent})); }catch(e){} }
+
+// ---------- utils ----------
+function parseCSV(text){
+  const rows=[]; let row=[], f='', q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(q){ if(c=='"'){ if(text[i+1]=='"'){f+='"';i++;} else q=false; } else f+=c; }
+    else if(c=='"') q=true;
+    else if(c==','){ row.push(f); f=''; }
+    else if(c=='\n'||c=='\r'){ if(c=='\r'&&text[i+1]=='\n') i++; row.push(f); rows.push(row); row=[]; f=''; }
+    else f+=c;
+  }
+  if(f!==''||row.length){ row.push(f); rows.push(row); }
+  const h=rows.shift(); return rows.filter(r=>r.length===h.length).map(r=>Object.fromEntries(h.map((k,i)=>[k,r[i]])));
+}
+const D = s => s ? new Date(s.replace(' ','T')) : null;
+const hrs = (a,b) => (b-a)/36e5;
+const median = a => { if(!a.length) return null; const s=[...a].sort((x,y)=>x-y), m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; };
+const pct = (a,b) => b ? Math.round(100*a/b) : 0;
+const fmtH = h => h==null ? '–' : h<48 ? Math.round(h)+'h' : (h/24).toFixed(1)+'d';
+const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const tmplOf = d => d.replace(/\d+/g,'N').trim();
+const tokens = s => new Set(s.toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w=>(w.length>2||w==='am'||w==='pm') && !['the','for','and','not','but','was','are','our','with','still','after'].includes(w)));
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),1800); }
+
+// ---------- load ----------
+function ingest(text){
+  const raw=parseCSV(text);
+  T=raw.map(r=>{
+    const t={...r};
+    t.created=D(r.created_at); t.firstResp=D(r.first_response_at); t.firstClosed=D(r.first_closed_at); t.finalClosed=D(r.final_closed_at);
+    t.esc=r.escalated_to_eng==='Yes'; t.handoffs=+r.eng_handoffs||0; t.reopens=+r.reopen_count||0;
+    t.csat=r.csat_score===''?null:+r.csat_score; t.outcome=r.eng_outcome||'';
+    t.open=r.status!=='Closed'; t.tmpl=tmplOf(r.description);
+    t.ttr=t.finalClosed?hrs(t.created,t.finalClosed):null;
+    return t;
+  });
+  AS_OF=new Date(Math.max(...T.flatMap(t=>[t.created,t.finalClosed,t.firstResp].filter(Boolean).map(d=>+d))));
+  T.forEach(t=>t.age=t.open?hrs(t.created,AS_OF):null);
+  AGENTS=[...new Set(T.map(t=>t.assigned_agent))].sort();
+  if(ST.agent!=='__all' && !AGENTS.includes(ST.agent)) ST.agent=AGENTS[0];
+  ST.acts={}; ST.sel=null; ST.form={};
+  buildIndexes();
+  const sel=document.getElementById('agentSel');
+  sel.innerHTML=AGENTS.map(a=>`<option ${a===ST.agent?'selected':''}>${esc(a)}</option>`).join('')+`<option value="__all" ${ST.agent==='__all'?'selected':''}>Whole team</option>`;
+  render();
+}
+let BY_TMPL={}, BY_CAT={}, CAT_ESC={}, TEMPLATES={};
+function buildIndexes(){
+  BY_TMPL={}; BY_CAT={}; TEMPLATES={};
+  T.forEach(t=>{ (BY_TMPL[t.tmpl]??=[]).push(t); (BY_CAT[t.category]??=[]).push(t); (TEMPLATES[t.category]??=new Set()).add(t.tmpl); });
+  CAT_ESC={}; for(const c in BY_CAT){ const a=BY_CAT[c]; CAT_ESC[c]=a.filter(t=>t.esc).length/a.length; }
+}
+
+// ---------- analytics on history ----------
+function historyStats(list, excludeId){
+  const h=list.filter(t=>t.ticket_id!==excludeId);
+  const closed=h.filter(t=>!t.open);
+  const l1=closed.filter(t=>!t.esc);
+  const escd=h.filter(t=>t.esc && t.outcome);
+  const oc={}; Object.values(O).forEach(o=>oc[o]=0); escd.forEach(t=>oc[t.outcome]++);
+  const avoid=escd.filter(t=>AVOID.has(t.outcome)).length;
+  const solvers={}; l1.filter(t=>t.reopens===0).forEach(t=>solvers[t.assigned_agent]=(solvers[t.assigned_agent]||0)+1);
+  return { n:h.length, closed:closed.length, l1:l1.length, l1Share:pct(l1.length,closed.length),
+    l1Med:median(l1.map(t=>t.ttr)), escMed:median(closed.filter(t=>t.esc).map(t=>t.ttr)),
+    escN:escd.length, oc, avoid, avoidPct:pct(avoid,escd.length), fixPct:pct(oc[O.FIX],escd.length),
+    l1Reopen:pct(l1.filter(t=>t.reopens>0).length,l1.length),
+    solvers:Object.entries(solvers).sort((a,b)=>b[1]-a[1]).slice(0,3) };
+}
+function knownIssue(tk){
+  const from = new Date(+AS_OF - 14*864e5);
+  const list=BY_TMPL[tk.tmpl]||[];
+  const dups=list.filter(t=>t.ticket_id!==tk.ticket_id && t.outcome===O.DUP && t.created>=from && t.created<=AS_OF);
+  const live=list.filter(t=>t.ticket_id!==tk.ticket_id && t.status==='Open - with Engineering');
+  return {dups, live};
+}
+
+// ---------- queue ----------
+function groupOf(t){
+  if(t.status==='Open - with L1' && t.esc && t.outcome===O.FIX) return 'fixed';
+  if(t.status==='Open - with L1' && t.esc) return 'back';
+  if(t.status==='Open - with L1') return 'new';
+  return 'eng';
+}
+const GROUPS = [
+  ['back','Back from engineering','Returned unfixed. Close the gap before sending again.'],
+  ['fixed','Engineering says fixed','Confirm with the client and close.'],
+  ['new','New','Solve at L1, or escalate with a full packet.'],
+  ['eng','Waiting on engineering','Chase anything older than 72 hours.'],
+];
+function myOpen(){ return T.filter(t=>t.open && (ST.agent==='__all'||t.assigned_agent===ST.agent)); }
+
+
+const CSHORT={'Roster / booking not syncing':'Roster','Live tracking / GPS incorrect':'GPS','Report export failing':'Report export','Cab delay / no-show complaint':'Cab delay','How-to / feature request':'How-to','Login / access issue':'Login','OTP / boarding issue':'OTP','Billing / invoice discrepancy':'Billing','Employee address / geocode change':'Address','Driver / vehicle compliance docs':'Compliance'};
+const cs = c => CSHORT[c]||c;
+const TAG = {[O.INFO]:'Missing info',[O.CFG]:'Config issue',[O.DUP]:'Duplicate',[O.HOW]:'How-to',[O.NR]:"Can't reproduce",[O.FIX]:'Fixed'};
+const FILTERS = [['all','All','Every open ticket of yours'],['back','Sent back','Engineering returned these unfixed. Close the gap before sending again.'],['fixed','To close','Engineering says fixed. Confirm with the client and close.'],['new','New','Solve at L1, or escalate with a full packet.'],['eng','With engineering','Chase anything older than 72 hours.']];
+const GORDER = {back:0,fixed:1,new:2,eng:3};
+
+function renderStrip(){
+  const all=T.filter(t=>t.open), mine=myOpen();
+  const a=Object.values(ST.acts), n=k=>a.filter(x=>x.type===k).length;
+  const parts=[['resolved','closed'],['linked','linked'],['routed','routed'],['escalated','escalated'],['chased','chased']].filter(([k])=>n(k)).map(([k,l])=>`${n(k)} ${l}`);
+  const right = `${parts.length?`<span class="log" title="Actions taken in this session">Today: ${parts.join(', ')}</span>`:''}
+    <span class="asof" title="Data as of ${AS_OF.toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'})}">Team: <b>${all.length}</b> open, <b>${all.filter(t=>t.status==='Open - with Engineering').length}</b> with engineering</span>`;
+  let left='';
+  if(ST.view==='queue'){
+    left = `<div class="filters" role="tablist">${FILTERS.map(([k,l,h])=>{
+      const c = k==='all'?mine.length:mine.filter(t=>groupOf(t)===k).length;
+      return `<button role="tab" class="f f-${k} ${ST.filter===k?'on':''}" data-f="${k}" title="${h}" ${c||k==='all'?'':'disabled'}>${k==='all'?'':'<i></i>'}${l}<span>${c}</span></button>`;}).join('')}</div>`;
+  } else left = `<span class="you">${ST.view==='me'?'':'Check a ticket before it is in the export'}</span>`;
+  document.getElementById('strip').innerHTML = left + `<div class="sright">${right}</div>`;
+}
+
+function tagFor(t,g){
+  if(g==='back') return [TAG[t.outcome],'bad',`Engineering verdict: ${OSHORT[t.outcome]}, handoff ${t.handoffs}`];
+  if(g==='fixed') return ['Fixed','ok','Fixed by engineering, needs client confirmation'];
+  if(g==='eng') return [t.age>72?'Chase':'With eng', t.age>72?'bad':'dim', `With engineering, ${t.handoffs} handoff${t.handoffs>1?'s':''}`];
+  return ['New','new','Not escalated yet'];
+}
+function renderQueue(){
+  const items=myOpen().filter(t=>ST.filter==='all'||groupOf(t)===ST.filter)
+    .sort((a,b)=>(GORDER[groupOf(a)]-GORDER[groupOf(b)])||(PRANK[a.priority]-PRANK[b.priority])||(b.age-a.age));
+  if(!items.length) return '<div class="empty"><b>Nothing here</b>No open tickets in this view.</div>';
+  return items.map(t=>{
+    const g=groupOf(t), act=ST.acts[t.ticket_id], [tag,tk,tip]=act?['Done','ok',act.label]:tagFor(t,g);
+    return `<button class="qitem ${ST.sel===t.ticket_id?'sel':''} ${act?'done':''}" data-id="${t.ticket_id}">
+      <span class="chip ${t.priority}">${t.priority}</span>
+      <span class="qmain"><span class="qtop"><span class="qdesc" title="${esc(t.description)}">${esc(t.description)}</span><span class="qage ${t.age>72?'old':''}" title="Open for ${fmtH(t.age)}">${fmtH(t.age)}</span></span>
+        <span class="qbot"><span class="q2"><span>${esc(t.client_name)}</span><span>${esc(cs(t.category))}</span>${ST.agent==='__all'?`<span>${esc(t.assigned_agent)}</span>`:''}</span><span class="tag ${tk}" title="${esc(tip)}">${esc(tag)}</span></span></span>
+    </button>`;}).join('');
+}
+
+function outcomeBar(oc,total){
+  if(!total) return '<div class="small">No past escalations of this type.</div>';
+  const os=Object.values(O).filter(o=>oc[o]);
+  return `<div class="vbar">${os.map(o=>`<div title="${OSHORT[o]}: ${oc[o]}" style="flex:${oc[o]};background:${OCOL[o]}"></div>`).join('')}</div>
+    <div class="legend">${os.map(o=>`<span><i style="background:${OCOL[o]}"></i>${OSHORT[o]} <b>${oc[o]}</b></span>`).join('')}</div>`;
+}
+
+// [kind, title, one-line action, longer why (shown on hover)]
+function recommendation(tk, st, ki, pb, sc=st){
+  const g = tk._new ? 'new' : groupOf(tk);
+  if(g==='fixed') return ['good','Fixed by engineering','Confirm with the client, then close.','Tickets closed without confirmation are reopened far more often; reopened tickets average CSAT 2.4 vs 3.8.'];
+  if(g==='back' && tk.outcome===O.INFO) return ['bad','Sent back: missing info','Fill every detail below before re-escalating.','Tickets returned for missing info took a median of 5 days to close.'];
+  if(g==='back' && tk.outcome===O.CFG) return ['bad','Sent back: config issue','Usually fixable at L1. Run the checks, fix it, confirm with the client.',''];
+  if(g==='back' && tk.outcome===O.HOW) return ['warn','Sent back: how-to','Answer the client directly and close.',''];
+  if(g==='back' && tk.outcome===O.NR) return ['warn',"Sent back: couldn't reproduce",'Get a fresh example (IDs and exact time) before re-escalating.',''];
+  if(g==='back' && tk.outcome===O.DUP) return ['warn','Sent back: known issue','Update the client with the known-issue status. No new escalation.',''];
+  if(pb.route!=='eng' && pb.route!=='l1') return ['warn','Usually not for engineering',`${sc.l1Share}% of ${cs(tk.category).toLowerCase()} tickets were handled without engineering. Route it to ${pb.routeTo}.`,`When ${cs(tk.category).toLowerCase()} tickets were escalated, engineering fixed ${sc.fixPct}% of ${sc.escN}. Escalate only if the app's own data is wrong (GPS trail, no-show marking, document status).`];
+  if(ki.dups.length) return ['info','Possible known issue','Check the engineering tickets below first.',''];
+  if(g==='eng') return tk.age>72 ? ['warn','Over 72 hours with engineering','Chase it and give the client a dated update.',''] : ['info','With engineering','Nothing to do yet. Chase if it passes 72 hours.',''];
+  if(st.l1Share>=50) return ['good',`Usually solved at L1 (${st.l1Share}%)`,'Run the checks before escalating.',`Median close at L1 is ${fmtH(st.l1Med)} vs ${fmtH(st.escMed)} once escalated.`];
+  return ['info','Often needs engineering','Escalate with a complete packet.',`${st.avoidPct}% of past escalations of this type still came back.`];
+}
+
+function renderWork(){
+  const tk = ST.view==='check' ? ST.newTicket : T.find(t=>t.ticket_id===ST.sel);
+  if(!tk) return {body: ST.view==='check' ? '' : '<div class="empty"><b>Pick a ticket</b>Start with the ones engineering sent back.</div>', bar:''};
+  const pb = PLAYBOOK[tk.category]||DEFAULT_PB;
+  const stT = historyStats(BY_TMPL[tk.tmpl]||[], tk.ticket_id), stC = historyStats(BY_CAT[tk.category]||[], tk.ticket_id);
+  const exact = stT.n>=8, st = exact ? stT : stC;
+  const ki = knownIssue(tk);
+  const [rk,rt,rb,rwhy] = recommendation(tk, st, ki, pb, stC);
+  const f = ST.form[tk.ticket_id] ??= {checks:{}, fields:{}, confirm:false, p1:false, p1why:''};
+  const act = ST.acts[tk.ticket_id];
+  const g = tk._new ? 'new' : groupOf(tk);
+  const route = pb.route!=='eng' && pb.route!=='l1';
+  const cks = checksFor(tk), ocat = stC.oc;
+  const checksLeft = cks.filter((_,i)=>!f.checks[i]).length;
+  const reqIdx = pb.fields.map((x,i)=>x[1]?i:-1).filter(i=>i>=0);
+  const fieldsLeft = reqIdx.filter(i=>!(f.fields[i]||'').trim()).length;
+  const total = cks.length + reqIdx.length, doneN = total - checksLeft - fieldsLeft;
+  const complete = !checksLeft && !fieldsLeft;
+  const p1ok = tk.priority==='P1' && f.p1 && f.p1why.trim();
+  const canEsc = complete || p1ok;
+
+  const created = tk.created && !tk._new ? `${tk.created.getDate()} ${tk.created.toLocaleString('en-GB',{month:'short'})}, ${String(tk.created.getHours()).padStart(2,'0')}:${String(tk.created.getMinutes()).padStart(2,'0')}` : '';
+  const facts = tk._new ? [['Category',tk.category,''],['Priority',tk.priority,'']] : [
+      ['Client',tk.client_name,tk.client_tier],
+      ['Category',tk.category,''],
+      ['Open for',fmtH(tk.age),created?'since '+created:''],
+      ['Came in by',tk.channel,tk.reopens?`reopened ${tk.reopens}×`:'']]
+    .concat(tk.esc?[['Engineering',tk.eng_ticket_id,`${tk.handoffs} handoff${tk.handoffs>1?'s':''}`]]:[['Engineering','Not escalated','']]);
+  const head = `<div class="tk-head"><div class="tk-id"><span class="chip ${tk.priority}">${tk.priority}</span>${esc(tk._new?'New ticket':tk.ticket_id)}</div>
+    <h1>${esc(tk.description)}</h1>
+    <dl class="facts" ${tk._new?`style="grid-template-columns:repeat(${facts.length},minmax(0,1fr))"`:''}>${facts.map(([k,v,sub])=>`<div><dt>${k}</dt><dd>${esc(v)}</dd>${sub?`<dd class="sub">${esc(sub)}</dd>`:''}</div>`).join('')}</dl></div>`;
+
+  if(act){
+    return {body: head + `<div class="done"><div class="t">${act.label}</div><div class="small">Done at ${act.at}. ${act.packet?'Paste this into the ticketing system.':''}</div>${act.packet?`<pre class="packet">${esc(act.packet)}</pre>`:''}</div>`,
+      bar:`<div class="msg"><b>${act.label}.</b> Pick the next ticket.</div><div class="acts">${act.packet?'<button class="btn ghost" data-copy="1">Copy text</button>':''}<button class="btn ghost" data-undo="1">Undo</button></div>`};
+  }
+
+  const kiBox = (ki.dups.length||ki.live.length) ? `<div class="ki">
+      <div class="ki-main"><div class="t">Engineering may already be on this
+        <span class="tip" tabindex="0" title="A hint, not proof: on past data it caught about half of real duplicates and wrongly flagged about 1 in 5 other escalations. Open the ENG ticket and compare before linking.">How reliable?</span></div>
+      <div class="ids">${ki.live.map(t=>`<span class="eng" title="Open with engineering now: ${esc(t.client_name)}, ${fmtH(t.age)}">${esc(t.eng_ticket_id)} <em>open</em></span>`).join('')}${ki.dups.slice(-6).map(t=>`<span class="eng" title="Marked duplicate of a known issue in the last 14 days">${esc(t.eng_ticket_id)} <em>duplicate</em></span>`).join('')}</div></div>
+      ${g==='fixed'||g==='eng'?'':'<button class="btn violet" data-act="linked">Link and update client</button>'}</div>` : '';
+  const showRec = !(kiBox && rt==='Possible known issue');
+  const rec = showRec ? `<div class="rec ${rk}"><b>${rt}.</b> <span>${rb}</span>${rwhy?` <span class="tip" tabindex="0" title="${esc(rwhy)}">Why?</span>`:''}</div>` : '';
+
+  const sim = `<section class="card sim"><div class="card-h"><h2>Similar tickets</h2><span class="dim">${st.n} ${exact?'with the same problem':'in this category'}</span></div>
+    <div class="stats">
+      <div><b>${st.l1Share}%</b><span>solved at L1</span></div>
+      <div><b>${fmtH(st.l1Med)}</b><span>to close at L1</span></div>
+      <div><b>${fmtH(st.escMed)}</b><span>to close if escalated</span></div>
+      <div><b class="${st.escN&&st.avoidPct>=50?'red':''}">${st.escN?st.avoidPct+'%':'–'}</b><span>${st.escN?'of escalations sent back':'never escalated'}</span></div>
+    </div>
+    <div class="sim-foot">${st.solvers.length?`<span>Ask <b>${st.solvers.map(([a])=>esc(a)).join('</b>, <b>')}</b>: they solve these most.</span>`:'<span></span>'}
+      <details><summary>Engineering verdicts (${st.escN})</summary>${outcomeBar(st.oc, st.escN)}</details></div></section>`;
+
+  let main='', bar='';
+  if(g==='fixed'){
+    main = `<section class="card"><div class="card-h"><h2>Next step</h2></div><p class="p">Call or message the client to check the fix works on their side, then close.</p></section>`;
+    bar = `<div class="msg">Close once the client confirms.</div><div class="acts"><label class="confirm"><input type="checkbox" data-confirm="1" ${f.confirm?'checked':''}>Client confirmed</label><button class="btn go" data-act="resolved" ${f.confirm?'':'disabled'}>Close ticket</button></div>`;
+  } else if(g==='eng'){
+    main = `<section class="card"><div class="card-h"><h2>Next step</h2><span class="dim">${tk.outcome?`Last verdict: ${OSHORT[tk.outcome]}`:''}</span></div><p class="p">${tk.age>72?'Nudge engineering on '+esc(tk.eng_ticket_id)+' and give the client a dated update.':'Nothing to do yet.'}</p></section>`;
+    bar = `<div class="msg">${tk.age>72?'<b>Over 72 hours.</b> Chase today.':'Chase if it passes 72 hours.'}</div><div class="acts"><button class="btn ${tk.age>72?'esc':'ghost'}" data-act="chased">Log chase</button></div>`;
+  } else {
+    const who = route ? pb.routeTo : 'engineering';
+    main = `<section class="card"><div class="card-h"><h2>Checklist</h2><span class="dim">${doneN} of ${total} done</span></div>
+      <div class="cl">
+        <div class="cl-col"><h3><span class="stepn ${checksLeft?'':'ok'}">${checksLeft?'1':'✓'}</span>Checks</h3>
+          <p class="cl-note">${stC.l1Share}% of ${esc(cs(tk.category).toLowerCase())} tickets were solved at L1. Each tag shows the send-back that check is aimed at.</p>
+          ${cks.map(([c,ty],i)=>{ const [o,lab]=CTYPE[ty]||[]; const n=o?ocat[o]:0;
+            return `<label class="chk ${f.checks[i]?'on':''}"><input type="checkbox" data-chk="${i}" ${f.checks[i]?'checked':''}><span>${esc(c)}</span>${n?`<em class="why" title="Engineering sent back ${n} ${esc(cs(tk.category).toLowerCase())} escalation${n>1?'s':''} as ${lab}. This check is aimed at that.">${n} ${lab}</em>`:''}</label>`;}).join('')}</div>
+        <div class="cl-col"><h3><span class="stepn ${fieldsLeft?'':'ok'}">${fieldsLeft?'2':'✓'}</span>Details for ${esc(who)}</h3>
+          ${!route&&ocat[O.INFO]?`<p class="cl-note">Engineering sent back <b>${ocat[O.INFO]}</b> ${esc(cs(tk.category).toLowerCase())} tickets for missing information. These are the details it asks for.</p>`:''}
+          ${pb.fields.map(([l,r],i)=>`<div class="field"><label for="fld${i}">${esc(l)}${r?'':' <span class="dim">optional</span>'}</label><input id="fld${i}" data-fld="${i}" class="${(f.fields[i]||'').trim()?'filled':''}" value="${esc(f.fields[i]||'')}"></div>`).join('')}
+          ${tk.priority==='P1'?`<div class="p1"><label class="chk ${f.p1?'on':''}"><input type="checkbox" data-p1="1" ${f.p1?'checked':''}><span><b>P1 bypass</b>: escalate now, finish the checks within an hour</span></label>
+            ${f.p1?`<div class="field"><label for="p1why">Impact</label><input id="p1why" data-p1why="1" value="${esc(f.p1why)}" placeholder="e.g. 40 employees can't board"></div>`:''}</div>`:''}
+        </div></div></section>`;
+    const left=[]; if(checksLeft) left.push(`${checksLeft} check${checksLeft>1?'s':''}`); if(fieldsLeft) left.push(`${fieldsLeft} detail${fieldsLeft>1?'s':''}`);
+    const lbl = complete ? `<b>Ready to ${route?'route':'escalate'}</b>` : p1ok ? `<b>P1 bypass on</b>, ${left.join(' and ')} to finish` : `<b>Locked</b>: ${left.join(' and ')} left`;
+    bar = `<div class="gate ${complete?'open':''}"><div class="meter" aria-hidden="true">${Array.from({length:total},(_,i)=>`<i class="${i<doneN?'on':''}"></i>`).join('')}</div><div class="lbl">${lbl}</div></div>
+      <div class="acts">
+        <label class="confirm" title="Tick once the client confirms it's solved. Unlocks Close at L1."><input type="checkbox" data-confirm="1" ${f.confirm?'checked':''}>Client confirmed</label>
+        <button class="btn go" data-act="resolved" ${f.confirm?'':'disabled'}>Close at L1</button>
+        ${route?`<button class="btn esc" data-act="routed" ${complete?'':'disabled'}>Route to ${esc(pb.routeTo)}</button>`:''}
+        <button class="btn ${route?'ghost':'esc'}" data-act="escalated" ${canEsc?'':'disabled'}>${g==='back'?'Re-escalate':'Escalate'}</button>
+      </div>`;
+  }
+  return {body: head + rec + kiBox + sim + main, bar};
+}
+
+function packetFor(tk, type){
+  const pb=PLAYBOOK[tk.category]||DEFAULT_PB, f=ST.form[tk.ticket_id];
+  const L=[];
+  if(type==='escalated'){
+    L.push(`[ESCALATION] ${tk.ticket_id} · ${tk.priority} · ${tk.category}`);
+    if(!tk._new) L.push(`Client: ${tk.client_name} (${tk.client_tier}) · raised ${tk.created_at} via ${tk.channel}`);
+    L.push(`Summary: ${tk.description}`);
+    if(f.p1) L.push(`P1 BYPASS – impact: ${f.p1why}`);
+    L.push('','Checks already done by L1:'); checksFor(tk).forEach(([c],i)=>L.push(` [${f.checks[i]?'x':' '}] ${c}`));
+    L.push('','Details:'); pb.fields.forEach(([l],i)=>L.push(` ${l}: ${(f.fields[i]||'—').trim()}`));
+    const ki=knownIssue(tk); if(ki.live.length) L.push('',`Related open eng tickets (same symptom): ${ki.live.map(t=>t.eng_ticket_id).join(', ')}`);
+    if(tk.esc) L.push('',`Previous verdict: ${OSHORT[tk.outcome]||'-'} (handoff ${tk.handoffs})`);
+  } else if(type==='linked'){
+    const ki=knownIssue(tk); const ids=[...new Set([...ki.live,...ki.dups].map(t=>t.eng_ticket_id))];
+    L.push(`Linked ${tk.ticket_id} to known issue(s): ${ids.join(', ')}`,'',`Client update: "We've matched your report to an issue our engineering team is already working on. We'll update you as soon as the fix is live."`);
+  } else if(type==='routed'){
+    L.push(`[ROUTED to ${pb.routeTo}] ${tk.ticket_id} · ${tk.description}`); pb.fields.forEach(([l],i)=>L.push(` ${l}: ${(f.fields[i]||'—').trim()}`));
+  } else if(type==='chased'){
+    L.push(`Chase on ${tk.eng_ticket_id}: ${tk.ticket_id} open ${fmtH(tk.age)}, ${tk.handoffs} handoff(s). Client is waiting – need ETA.`);
+  }
+  return L.join('\n');
+}
+
+// ---------- My numbers ----------
+function agentTable(){
+  const rows=AGENTS.map(a=>{
+    const m=T.filter(t=>t.assigned_agent===a), e=m.filter(t=>t.esc), ne=m.filter(t=>!t.esc&&!t.open);
+    const exp=m.reduce((s,t)=>s+CAT_ESC[t.category],0)/m.length;
+    const cs=m.filter(t=>t.csat!=null);
+    return {a, n:m.length, esc:pct(e.length,m.length), exp:Math.round(exp*100), back:pct(e.filter(t=>AVOID.has(t.outcome)).length,e.length),
+      reopen:pct(m.filter(t=>t.reopens>0).length,m.length), med:median(ne.map(t=>t.ttr)), csat:cs.length?(cs.reduce((s,t)=>s+t.csat,0)/cs.length):null,
+      how:e.filter(t=>t.outcome===O.HOW).length, info:e.filter(t=>t.outcome===O.INFO).length};
+  });
+  const md=k=>median(rows.map(r=>r[k]));
+  return {rows, team:{back:md('back'), reopen:md('reopen'), med:md('med'), csat:md('csat')}};
+}
+
+// ---------- My stats charts (hand-drawn SVG) ----------
+const CH = {me:'#1F4FA3', other:'#AEB9C4', ink:'#15202B', muted:'#6A7784', grid:'#E8EDF1', team:'#6A7784'};
+const svgT = s => esc(s);
+function hbarChart(rows, key, med, opt={}){
+  const W=460, L=78, R=52, rowH=26, top=22, H=top+rows.length*rowH+6;
+  const max = opt.max || Math.max(100, ...rows.map(r=>r[key]||0));
+  const x = v => L + (W-L-R)*(v/max);
+  let g=`<line x1="${x(med)}" x2="${x(med)}" y1="${top-6}" y2="${H-4}" stroke="${CH.team}" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <text x="${x(med)}" y="11" text-anchor="middle" class="ax">Team median ${Math.round(med)}%</text>`;
+  rows.forEach((r,i)=>{
+    const y=top+i*rowH, v=r[key]||0, me=r.a===ST.agent, w=Math.max(2,x(v)-L);
+    g+=`<g class="mk" tabindex="0" data-tip="${svgT(r.a)}: ${v}% ${opt.what||''}"><rect x="0" y="${y}" width="${W}" height="${rowH}" fill="transparent"/>
+      <text x="${L-10}" y="${y+17}" text-anchor="end" class="lb ${me?'me':''}">${svgT(r.a)}</text>
+      <path d="M${L},${y+6} h${w-4} a4,4 0 0 1 4,4 v6 a4,4 0 0 1 -4,4 h-${w-4} z" fill="${me?CH.me:CH.other}"/>
+      <text x="${W-2}" y="${y+17}" text-anchor="end" class="vl ${me?'me':''}">${v}%</text></g>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${svgT(opt.label||'')}">${g}</svg>`;
+}
+function dotChart(rows){
+  const W=460, L=78, R=74, rowH=26, top=22, H=top+rows.length*rowH+6, max=Math.max(70,...rows.map(r=>r.esc));
+  const x=v=>L+(W-L-R)*(v/max);
+  let g=[0,20,40,60].filter(v=>v<=max).map(v=>`<line x1="${x(v)}" x2="${x(v)}" y1="${top-4}" y2="${H-4}" stroke="${CH.grid}"/><text x="${x(v)}" y="11" text-anchor="middle" class="ax">${v}%</text>`).join('');
+  rows.forEach((r,i)=>{
+    const y=top+i*rowH+13, me=r.a===ST.agent, c=me?CH.me:CH.ink;
+    g+=`<g class="mk" tabindex="0" data-tip="${svgT(r.a)}: escalates ${r.esc}%, expected ${r.exp}% for their mix"><rect x="0" y="${y-13}" width="${W}" height="${rowH}" fill="transparent"/>
+      <text x="${L-10}" y="${y+4}" text-anchor="end" class="lb ${me?'me':''}">${svgT(r.a)}</text>
+      <line x1="${x(r.exp)}" x2="${x(r.esc)}" y1="${y}" y2="${y}" stroke="${me?CH.me:CH.other}" stroke-width="2"/>
+      <circle cx="${x(r.exp)}" cy="${y}" r="4.5" fill="#fff" stroke="${CH.muted}" stroke-width="2"/>
+      <circle cx="${x(r.esc)}" cy="${y}" r="5" fill="${c}" stroke="#fff" stroke-width="2"/>
+      <text x="${W-R+10}" y="${y+4}" class="vl ${me?'me':''}">${r.esc}% <tspan class="ax">vs ${r.exp}%</tspan></text></g>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Escalation rate against expected rate per agent">${g}</svg>`;
+}
+const mkey = d => d.getFullYear()*12+d.getMonth();
+function monthKeys(){ const ks=[...new Set(T.map(t=>mkey(t.created)))].sort((a,b)=>a-b); return ks.slice(-6); }
+function monthly(list){
+  return monthKeys().map(m=>{ const a=list.filter(t=>mkey(t.created)===m), e=a.filter(t=>t.esc), eo=e.filter(t=>t.outcome);
+    return {esc:pct(e.length,a.length), back:pct(eo.filter(t=>AVOID.has(t.outcome)).length,eo.length), reopen:pct(a.filter(t=>t.reopens>0).length,a.length)}; });
+}
+function lineChart(you, team, key, title){
+  const W=300, H=160, L=34, R=64, T=14, B=26, xs=monthKeys().map(k=>new Date(Math.floor(k/12),k%12,1).toLocaleString('en-GB',{month:'short'})), n=xs.length, last=n-1;
+  const vals=[...team.map(d=>d[key]),...(you?you.map(d=>d[key]):[])], max=Math.max(20,Math.ceil(Math.max(...vals)/20)*20);
+  const x=i=>n>1?L+(W-L-R)*i/last:L+(W-L-R)/2, y=v=>T+(H-T-B)*(1-v/max);
+  let g=[0,max/2,max].map(v=>`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="${CH.grid}"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end" class="ax">${Math.round(v)}%</text>`).join('');
+  g+=xs.map((m,i)=>`<text x="${x(i)}" y="${H-6}" text-anchor="middle" class="ax">${m}</text>`).join('');
+  const line=(d,c,dash)=>`<polyline points="${d.map((p,i)=>`${x(i)},${y(p[key])}`).join(' ')}" fill="none" stroke="${c}" stroke-width="2" ${dash?'stroke-dasharray="5 4"':''} stroke-linejoin="round"/>`;
+  g+=line(team,CH.team,1)+team.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p[key])}" r="4" fill="${CH.team}" stroke="#fff" stroke-width="2"/>`).join('');
+  if(you) g+=line(you,CH.me,0)+you.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p[key])}" r="4.5" fill="${CH.me}" stroke="#fff" stroke-width="2"/>`).join('');
+  // direct end labels, nudged apart if they collide
+  let ly=you?y(you[last][key]):null, lt=y(team[last][key]);
+  if(you && Math.abs(ly-lt)<14){ if(ly<lt){ly-=7;lt+=7}else{ly+=7;lt-=7} }
+  if(you) g+=`<text x="${W-R+8}" y="${ly+4}" class="vl me">You ${you[last][key]}%</text>`;
+  g+=`<text x="${W-R+8}" y="${lt+4}" class="vl" fill="${CH.team}">Team ${team[last][key]}%</text>`;
+  // hover columns
+  g+=xs.map((m,i)=>`<rect class="mk" tabindex="0" x="${x(i)-Math.min(30,(W-L-R)/(2*Math.max(last,1)))}" y="${T}" width="${2*Math.min(30,(W-L-R)/(2*Math.max(last,1)))}" height="${H-T-B}" fill="transparent" data-tip="${m}: ${you?`you ${you[i][key]}%, `:''}team ${team[i][key]}%"/>`).join('');
+  return `<div class="mini"><div class="mt">${title}</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${title} by month">${g}</svg></div>`;
+}
+function mixChart(meList, teamList){
+  const bar=(label,list)=>{ const e=list.filter(t=>t.esc&&t.outcome), n=e.length||1; let x=0;
+    const segs=Object.values(O).map(o=>{ const c=e.filter(t=>t.outcome===o).length, w=100*c/n; const s=c?`<div class="mk" tabindex="0" style="flex:${w};background:${OCOL[o]}" data-tip="${label}: ${OSHORT[o]} ${Math.round(w)}% (${c})"></div>`:''; return s;}).join('');
+    return `<div class="mixrow"><span class="lb2">${label}</span><div class="mixbar">${segs}</div><span class="ax2">${e.length} esc.</span></div>`; };
+  const share=(list,o)=>{ const e=list.filter(t=>t.esc&&t.outcome); return e.length?100*e.filter(t=>t.outcome===o).length/e.length:0; };
+  let insight='';
+  if(meList){ const gaps=Object.values(O).filter(o=>o!==O.FIX).map(o=>[o,share(meList,o)-share(teamList,o)]).sort((a,b)=>b[1]-a[1]);
+    const [o,d]=gaps[0]; insight = d>=3 ? `<p class="insight">Biggest gap: <b>${OSHORT[o].toLowerCase()}</b> is ${Math.round(share(meList,o))}% of your escalations, against ${Math.round(share(teamList,o))}% for the team.</p>` : `<p class="insight">Your mix of verdicts is close to the team's.</p>`;
+    insight += `<p class="insight">Engineering fixed <b>${Math.round(share(meList,O.FIX))}%</b> of what you sent, against ${Math.round(share(teamList,O.FIX))}% for the team.</p>`; }
+  return `${meList?bar('You',meList):''}${bar('Team',teamList)}
+    <div class="legend">${Object.values(O).map(o=>`<span><i style="background:${OCOL[o]}"></i>${OSHORT[o]}</span>`).join('')}</div>${insight}`;
+}
+function chartsHTML(rows, team){
+  const me=rows.find(r=>r.a===ST.agent);
+  const mine = me ? T.filter(t=>t.assigned_agent===ST.agent) : null;
+  const tm=monthly(T), ym=mine?monthly(mine):null;
+  const by=k=>[...rows].sort((a,b)=>b[k]-a[k]);
+  const tag = me ? `<span class="key"><i style="background:${CH.me}"></i>${esc(ST.agent)}</span><span class="key"><i style="background:${CH.other}"></i>Others</span>` : '';
+  return `<div class="charts">
+    <section class="card"><div class="card-h"><h2>Escalation rate</h2><span class="keys"><span class="key"><b class="dot"></b>Actual</span><span class="key"><b class="ring"></b>Expected for their mix</span></span></div>${dotChart(by('esc'))}</section>
+    <section class="card"><div class="card-h"><h2>Escalations sent back</h2><span class="keys">${tag}</span></div>${hbarChart(by('back'),'back',team.back,{label:'Share of escalations sent back per agent',what:'of escalations sent back'})}</section>
+    <section class="card"><div class="card-h"><h2>Tickets reopened</h2><span class="keys">${tag}</span></div>${hbarChart(by('reopen'),'reopen',team.reopen,{max:40,label:'Share of tickets reopened per agent',what:'of tickets reopened'})}</section>
+    <section class="card"><div class="card-h"><h2>Why escalations came back</h2><span class="dim">share of engineering verdicts</span></div>${mixChart(mine,T)}</section>
+    <section class="card wide"><div class="card-h"><h2>Month by month</h2><span class="keys">${me?`<span class="key line"><i style="background:${CH.me}"></i>${esc(ST.agent)}</span>`:''}<span class="key line dash"><i></i>Whole team</span></span></div>
+      <div class="minis">${lineChart(ym,tm,'esc','Escalated')}${lineChart(ym,tm,'back','Sent back')}${lineChart(ym,tm,'reopen','Reopened')}</div></section>
+  </div>`;
+}
+
+function renderMe(){
+  const {rows,team}=agentTable();
+  const me=rows.find(r=>r.a===ST.agent);
+  let notes=[];
+  if(me){
+    if(me.esc-me.exp>=10) notes.push(['bad',`You escalate <b>${me.esc}%</b> of tickets`,`The team rate for your mix is ${me.exp}%.`]);
+    if(me.exp-me.esc>=10) notes.push(['warn',`You escalate <b>${me.esc}%</b> of tickets`,`Below the ${me.exp}% expected for your mix. Fine only if tickets stay closed.`]);
+    if(me.back>=team.back+8) notes.push(['bad',`<b>${me.back}%</b> of your escalations came back`,`Team median ${Math.round(team.back)}%. Mostly missing info (${me.info}) and how-tos (${me.how}).`]);
+    if(me.back<=team.back-8) notes.push(['good',`Only <b>${me.back}%</b> of your escalations came back`,`Best on the team (median ${Math.round(team.back)}%).`]);
+    if(me.reopen>=team.reopen*2 && me.reopen>=12) notes.push(['bad',`Clients reopened <b>${me.reopen}%</b> of your tickets`,`Team median ${Math.round(team.reopen)}%. Use the "client confirmed" step before closing.`]);
+    if(!notes.length) notes.push(['good','In line with the team','Nothing stands out.']);
+  } else notes.push(['info','Whole team','Pick an agent at the top to see their own numbers.']);
+  const cls=(v,t)=> v!=null && v>=t*1.5 ? 'hi':'';
+  const H=(l,tip,num=1)=>`<th class="${num?'num':''}" ${tip?`title="${tip}"`:''}>${l}${tip?' <span class="q">?</span>':''}</th>`;
+  return `<div class="ws" style="grid-column:1/3"><div class="ws-scroll"><div class="inner">
+   <div class="notes">${notes.map(([k,t,d])=>`<div class="note ${k}"><div class="nt">${t}</div><div class="nd">${d}</div></div>`).join('')}</div>
+   ${chartsHTML(rows, team)}
+   <section class="card"><div class="card-h"><h2>All numbers</h2><span class="dim">Red is well above the team median, green is the best.</span></div>
+   <div style="overflow-x:auto"><table><thead><tr>${H('Agent','',0)}${H('Tickets')}${H('Escalated')}${H('Expected','The agent\'s escalation rate if they escalated each category at the team-wide rate')}${H('Sent back','Engineering returned it as missing info, config issue, duplicate, how-to or not reproducible')}${H('Reopened')}${H('Close at L1','Median time to close tickets solved without engineering')}${H('CSAT')}</tr></thead><tbody>
+   ${rows.map(r=>`<tr class="${r.a===ST.agent?'me':''}"><td>${esc(r.a)}</td><td class="num">${r.n}</td><td class="num ${r.esc-r.exp>=15?'hi':''}">${r.esc}%</td><td class="num">${r.exp}%</td><td class="num ${r.back>=team.back+12?'hi':r.back<=team.back-12?'lo':''}">${r.back}%</td><td class="num ${cls(r.reopen,team.reopen)}">${r.reopen}%</td><td class="num">${fmtH(r.med)}</td><td class="num">${r.csat?r.csat.toFixed(1):'–'}</td></tr>`).join('')}
+   </tbody></table></div></section>
+   </div></div></div>`;
+}
+
+function renderCheck(){
+  const cats=Object.keys(BY_CAT).sort();
+  const nt=ST.newTicket;
+  const w = nt ? renderWork() : {body:'',bar:''};
+  const matchN=(BY_TMPL[nt?.tmpl]||[]).length;
+  return `<div class="ws" style="grid-column:1/3"><div class="ws-scroll"><div class="inner">
+    <section class="card"><div class="card-h"><h2>Quick check</h2><span class="dim">for a ticket that isn't in the export yet</span></div>
+    <div class="newform">
+      <div class="field"><label for="ndesc">What the client reported</label><input id="ndesc" placeholder="e.g. employees booked for 6 AM shift missing in roster" value="${esc(nt?nt.description:'')}"></div>
+      <div class="field"><label for="ncat">Category</label><select id="ncat">${cats.map(c=>`<option ${nt&&nt.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+      <div class="field"><label for="nprio">Priority</label><select id="nprio">${['P1','P2','P3','P4'].map(p=>`<option ${nt&&nt.priority===p?'selected':(!nt&&p==='P3'?'selected':'')}>${p}</option>`).join('')}</select></div>
+      <button class="btn esc" id="nrun">Check</button>
+    </div>${nt?(nt._score<0.2?`<div class="match">No close match, so numbers are for the whole category.</div>`:`<div class="match">Closest past problem: <b>${esc(nt.tmpl.replace(/\bN\b/g,'#'))}</b> <span class="dim">seen ${matchN} times</span></div>`):''}</section>
+    ${nt?'<div class="gap"></div>'+w.body:''}
+    </div></div>${w.bar?`<div class="bar">${w.bar}</div>`:''}</div>`;
+}
+function runCheck(){
+  const desc=document.getElementById('ndesc').value.trim(), cat=document.getElementById('ncat').value, pr=document.getElementById('nprio').value;
+  if(!desc){ toast('Type what the client reported'); return; }
+  const q=tokens(desc.replace(/\d+/g,' ')); let best=null, bs=-1;
+  for(const tm of TEMPLATES[cat]||[]){ const s=tokens(tm); const inter=[...q].filter(w=>s.has(w)).length; const j=inter/(q.size+s.size-inter||1); if(j>bs){bs=j;best=tm;} }
+  ST.newTicket={_new:true, ticket_id:'NEW-'+Date.now().toString().slice(-5), description:desc, category:cat, priority:pr, tmpl: bs>=0.2?best:'__none__', _score:bs, created:AS_OF, esc:false, outcome:''};
+  render();
+}
+
+
+function render(){
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.v===ST.view));
+  renderStrip();
+  const m=document.getElementById('main');
+  // keep scroll positions so ticking a box doesn't jump the page
+  const key=ST.view+'|'+(ST.view==='queue'?ST.sel:ST.newTicket?.ticket_id);
+  const q=m.querySelector('.queue'), s=m.querySelector('.ws-scroll');
+  const qTop=q?q.scrollTop:0, sTop=(s&&m.dataset.key===key)?s.scrollTop:0;
+  if(ST.view==='queue'){ const w=renderWork(); m.innerHTML=`<div class="queue">${renderQueue()}</div><div class="ws"><div class="ws-scroll"><div class="inner">${w.body}</div></div>${w.bar?`<div class="bar">${w.bar}</div>`:''}</div>`; }
+  else if(ST.view==='me') m.innerHTML=renderMe();
+  else m.innerHTML=renderCheck();
+  m.dataset.key=key;
+  const q2=m.querySelector('.queue'), s2=m.querySelector('.ws-scroll');
+  if(q2) q2.scrollTop=qTop; if(s2) s2.scrollTop=sTop;
+}
+function currentTicket(){ return ST.view==='check'?ST.newTicket:T.find(t=>t.ticket_id===ST.sel); }
+const LABEL={resolved:'Closed at L1 (client confirmed)',linked:'Linked to known issue',routed:'Routed off engineering',escalated:'Escalated with full packet',chased:'Chase logged'};
+document.addEventListener('click',e=>{
+  const tab=e.target.closest('#tabs button'); if(tab){ ST.view=tab.dataset.v; render(); return; }
+  const fb=e.target.closest('[data-f]'); if(fb){ ST.filter=fb.dataset.f; render(); return; }
+  const qi=e.target.closest('.qitem'); if(qi){ ST.sel=qi.dataset.id; render(); return; }
+  if(e.target.id==='nrun'){ runCheck(); return; }
+  const tk=currentTicket(); if(!tk) return;
+  const a=e.target.closest('[data-act]');
+  if(a && !a.disabled){ const type=a.dataset.act; ST.acts[tk.ticket_id]={type,label:LABEL[type],at:new Date().toLocaleTimeString(),packet:type==='resolved'?'':packetFor(tk,type)}; toast(LABEL[type]); render(); return; }
+  if(e.target.dataset.undo){ delete ST.acts[tk.ticket_id]; render(); return; }
+  if(e.target.dataset.copy){ const p=ST.acts[tk.ticket_id]?.packet||''; (navigator.clipboard?.writeText(p)||Promise.reject()).then(()=>toast('Copied'),()=>toast('Copy blocked — select the text instead')); }
+});
+document.addEventListener('change',e=>{
+  const tk=currentTicket(); if(e.target.id==='agentSel'){ ST.agent=e.target.value; ST.sel=null; save(); render(); return; }
+  if(e.target.id==='file'){ const fl=e.target.files[0]; if(fl){ fl.text().then(t=>{ingest(t); toast('Loaded '+T.length+' tickets');}); } return; }
+  if(!tk) return; const f=ST.form[tk.ticket_id];
+  if(e.target.dataset.chk!==undefined){ f.checks[e.target.dataset.chk]=e.target.checked; render(); }
+  if(e.target.dataset.confirm){ f.confirm=e.target.checked; render(); }
+  if(e.target.dataset.p1){ f.p1=e.target.checked; render(); }
+});
+document.addEventListener('input',e=>{
+  const tk=currentTicket(); if(!tk) return; const f=ST.form[tk.ticket_id]; if(!f) return;
+  if(e.target.dataset.fld!==undefined){ f.fields[e.target.dataset.fld]=e.target.value; refreshGate(); }
+  if(e.target.dataset.p1why){ f.p1why=e.target.value; refreshGate(); }
+});
+// chart tooltips (hover and keyboard focus)
+function showTip(el,x,y){ const tt=document.getElementById('tt'); tt.textContent=el.dataset.tip; tt.style.left=x+'px'; tt.style.top=y+'px'; tt.classList.add('on'); }
+document.addEventListener('pointermove',e=>{ const el=e.target.closest('[data-tip]'); if(el) showTip(el,e.clientX,e.clientY); else document.getElementById('tt').classList.remove('on'); });
+document.addEventListener('focusin',e=>{ const el=e.target.closest('[data-tip]'); if(el){ const r=el.getBoundingClientRect(); showTip(el,r.left+r.width/2,r.top); } });
+document.addEventListener('focusout',()=>document.getElementById('tt').classList.remove('on'));
+document.addEventListener('scroll',()=>document.getElementById('tt').classList.remove('on'),true);
+// re-render without losing focus on text inputs
+function refreshGate(){ const el=document.activeElement, key=el&&(el.dataset.fld??(el.dataset.p1why?'p1why':null)), pos=el&&el.selectionStart; render();
+  if(key!=null){ const n=key==='p1why'?document.querySelector('[data-p1why]'):document.querySelector(`[data-fld="${key}"]`); if(n){ n.focus(); try{n.setSelectionRange(pos,pos);}catch(_){} } } }
+// agent select also offers whole team
+fetch('tickets.csv').then(r=>{ if(!r.ok) throw 0; return r.text(); }).then(t=>ingest(t))
+ .catch(()=>{ document.getElementById('main').innerHTML='<div class="empty" style="grid-column:1/3">Could not load tickets.csv. Use "Load CSV" to open the RideOps ticket export.</div>'; });
+</script>
+</body>
+</html>
